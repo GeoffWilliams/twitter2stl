@@ -19,9 +19,9 @@ import subprocess
 width, height = 180, 100  # mm
 thickness = 5  # mm
 border_radius = 10  # mm
-qr_size = 30  # mm
 text_height = 1.5  # mm
 margin = 5 # mm
+line_height = 11 # mm 
     
 
 async def get_tweet(tweet_url):
@@ -98,7 +98,7 @@ def tweet_text_3d(tweet):
         "",
         tweet.created_at
     ]
-    text_objects = [translate([0, -i * 8, 0])(linear_extrude(height=text_height)(text(line, size=8, valign="center", halign="left"))) for i, line in enumerate(wrapped_lines)]
+    text_objects = [translate([0, -i * line_height, 0])(linear_extrude(height=text_height)(text(line, size=8, valign="center", halign="left", font="Roboto Black"))) for i, line in enumerate(wrapped_lines)]
     text_extruded = union()(*text_objects)
     return text_extruded
     
@@ -119,20 +119,29 @@ def create_3d_model(tweet, qr_image):
     # Convert QR to 3D
     qr_data = image_to_heightmap(qr_image)
     qr_model = []
+    qr_size = 0
     for y, row in enumerate(qr_data):
+        # QR is square so only need one measurement... there must be easier way 
+        # to calculate
+        qr_size +=1
         for x, pixel in enumerate(row):
             if pixel:
                 qr_model.append(translate([x, y, 0])(cube([1, 1, text_height])))
     
     qr_extruded = union()(*qr_model)
     
-    
-    final_model = union()(
-        base, 
-        translate([margin, height - margin, thickness])(text_extruded),
-        
+    final_model = difference() (
+        union()(
+            base, 
+            translate([margin, height - margin, thickness])(text_extruded),
+        ),
+
         # QR goes on back
-        translate([(width/2) - 100, (height/2) - 100, 0])(qr_extruded)
+        translate([(width/2) - (qr_size/2), (height/2) + (qr_size/2), text_height])(
+            rotate([180, 0, 0])(
+                qr_extruded
+            )
+        )
     )
     
     return final_model
