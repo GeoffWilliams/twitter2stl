@@ -3,46 +3,21 @@ import os
 load_dotenv()
 
 import qrcode
-import requests
-import asyncio
-from twikit import Client
 
 from solid2 import *  # SolidPython2 for OpenSCAD modeling
 from PIL import Image
 import numpy as np
-import sys
-# gpt stray import
-# import cv2
+import json
 import subprocess
 
 
-width, height = 180, 100  # mm
+width, height = 140, 100  # mm
 thickness = 5  # mm
 border_radius = 10  # mm
 text_height = 1.5  # mm
 margin = 5 # mm
 line_height = 11 # mm 
-    
-
-async def get_tweet(tweet_url):
-
-    client = Client('en-US')
-    twitter_username = os.getenv("TWITTER_USERNAME")
-    twitter_email = os.getenv("TWITTER_EMAIL")
-    twitter_password = os.getenv("TWITTER_PASSWORD")
-
-    if not twitter_username or not twitter_email or not twitter_password:
-        print("missing twitter variables!")
-        sys.exit(1)
-
-    # must be called using `await`.
-    await client.login(
-        auth_info_1=twitter_username,
-        auth_info_2=twitter_email,
-        password=twitter_password
-    )
-    tweet_id = tweet_url.split("/")[-1]
-    return await client.get_tweet_by_id(tweet_id)
+qr_pixel_size = 1.6
 
 def generate_qr_code(url, filename="qrcode.png"):
     qr = qrcode.QRCode(box_size=10, border=4)
@@ -81,24 +56,24 @@ def tweet_text_3d(tweet):
 
     
     tweet_text = f"""
-    {tweet.user.name}
-    @{tweet.user.screen_name}
-    {tweet.text}
+    {tweet['user']['name']}
+    @{tweet['user']['screen_name']}
+    {tweet['text']}
 
-    {tweet.created_at_datetime}
+    {tweet['created_at']}
     """
     print(tweet_text)
 
     # manually break lines like above
     wrapped_lines = [
-        tweet.user.name,
-        f"@{tweet.user.screen_name}",
+        tweet['user']['name'],
+        f"@{tweet['user']['screen_name']}",
         "",
-        *wrap_text(tweet.text, max_chars=40),
+        *wrap_text(tweet['text'], max_chars=40),
         "",
-        tweet.created_at
+        tweet['created_at']
     ]
-    text_objects = [translate([0, -i * line_height, 0])(linear_extrude(height=text_height)(text(line, size=8, valign="center", halign="left", font="Roboto Black"))) for i, line in enumerate(wrapped_lines)]
+    text_objects = [translate([0, -i * line_height, 0])(linear_extrude(height=text_height)(text(line, size=6, valign="center", halign="left", font="Roboto Black"))) for i, line in enumerate(wrapped_lines)]
     text_extruded = union()(*text_objects)
     return text_extruded
     
@@ -123,10 +98,10 @@ def create_3d_model(tweet, qr_image):
     for y, row in enumerate(qr_data):
         # QR is square so only need one measurement... there must be easier way 
         # to calculate
-        qr_size +=1
+        qr_size += qr_pixel_size
         for x, pixel in enumerate(row):
             if pixel:
-                qr_model.append(translate([x, y, 0])(cube([1, 1, text_height])))
+                qr_model.append(translate([x * qr_pixel_size, y * qr_pixel_size, 0])(cube([qr_pixel_size, qr_pixel_size, text_height])))
     
     qr_extruded = union()(*qr_model)
     
@@ -146,12 +121,13 @@ def create_3d_model(tweet, qr_image):
     
     return final_model
 
-async def main():
+def main():
     # Example usage
-    tweet_url = "https://x.com/ongoncatron/status/738223444337233920"
-    tweet = await get_tweet(tweet_url)
-    
-    qr_file = generate_qr_code(tweet_url)
+    f = open('tweet.json')
+    tweet = json.load(f)
+
+
+    qr_file = generate_qr_code(tweet['url'])
     model = create_3d_model(tweet, qr_file)
 
     print(".scad output")
@@ -165,4 +141,4 @@ async def main():
     ])
      
 
-asyncio.run(main())
+main()
